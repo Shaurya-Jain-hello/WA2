@@ -1,0 +1,250 @@
+let planets = [];
+let sun;
+let blackHole = null;
+let showVectors = false;
+let chaoticMode = false;
+let seed;
+let stars = [];
+
+function setup() {
+  createCanvas(800, 600);
+  seed = int(random(100000));
+  randomSeed(seed);
+  noiseSeed(seed);
+
+  planets = [];
+  stars = [];
+
+  // Starry background cuz its space
+  for (let i = 0; i < 300; i++) {
+    stars.push(createVector(random(width), random(height)));
+  }
+
+  // Sun
+  sun = new ImportantBody(width / 2, height / 2, 10000, color(255, 204, 0)); // Yellow
+
+  // Black hole for chaotic mode
+  blackHole = chaoticMode ? new ImportantBody(random(width), random(height), 30000, color(30)) : null;
+
+  // Initial planets
+  for (let i = 0; i < 8; i++) {
+    addOrbitingPlanet();
+  }
+
+  background(0); // Start with black for trails
+}
+
+function draw() {
+  // Faint trail effect
+  noStroke();
+  fill(0, 20);
+  rect(0, 0, width, height);
+
+  // Draw stars
+  fill(255);
+  noStroke();
+  for (let s of stars) {
+    ellipse(s.x, s.y, 1.5, 1.5);
+  }
+  
+// Sun and black hole
+  sun.display();
+  if (chaoticMode && blackHole) blackHole.display();
+
+  for (let p of planets) {
+    let sunForce = sun.calculateGravity(p);
+    p.applyForce(sunForce);
+
+    if (chaoticMode && blackHole) {
+      let bhForce = blackHole.calculateGravity(p);
+      p.applyForce(bhForce);
+    }
+
+    p.update();
+    p.display();
+  }
+
+  planets = planets.filter(p => !p.isOffscreen());
+
+  // Box beow control text for readability
+  noStroke();
+  fill(20, 150);
+  rect(5, 5, 185, 180, 10); 
+
+  // Controls text
+  fill(255);
+  textFont('WDXL Lubrifont TC'); // Wanted to change font to look better
+  textAlign(LEFT, TOP);
+  textSize(17.5);
+  text(`Controls:
+Click: Add orbiting planet
+V: Toggle velocity vectors
+M: Toggle calm/chaotic mode
+R: Restart (same seed)
+N: New random seed
+Planets: ${planets.length}
+Mode: ${chaoticMode ? "CHAOTIC (black hole)" : "CALM (sun only)"}`, 10, 10);
+  
+  // Title
+  textAlign(CENTER)
+  textSize(35)
+  stroke("blue")
+  strokeWeight(6.75)
+  fill(255,255,0)
+  text("Shaurya's solar system",400,10)
+}
+
+// Controls:
+
+// Click to add new planet
+function mousePressed() {
+  addOrbitingPlanet(mouseX, mouseY);
+}
+// Other Controls
+function keyPressed() {
+  let k = key.toUpperCase();
+
+  if (k === 'V') {
+    showVectors = !showVectors;
+  } else if (k === 'M') {
+    chaoticMode = !chaoticMode;
+    setup();
+  } else if (k === 'R') {
+    randomSeed(seed);
+    noiseSeed(seed);
+    setup();
+  } else if (k === 'N') {
+    seed = int(random(100000));
+    randomSeed(seed);
+    noiseSeed(seed);
+    setup();
+  }
+}
+
+function addOrbitingPlanet(x = random(width), y = random(height)) {
+  let pos = createVector(x, y);
+  let dir = p5.Vector.sub(pos, sun.pos);
+  let distance = constrain(dir.mag(), 50, 400);
+  let speed = sqrt((0.9 * sun.mass) / distance);
+  let tangent = createVector(-dir.y, dir.x).normalize().mult(speed);
+  planets.push(new Planet(x, y, tangent));
+}
+
+// ImportantBody.js
+class ImportantBody {
+  constructor(x, y, mass, col) {
+    this.pos = createVector(x, y);
+    this.mass = mass;
+    this.col = col;
+  }
+
+  calculateGravity(p) {
+    let dir = p5.Vector.sub(this.pos, p.pos);
+    let d = constrain(dir.mag(), 5, 500);
+    let G = 1;
+    let forceMag = (G * this.mass * p.mass) / (d * d);
+    dir.setMag(forceMag);
+    return dir;
+  }
+
+  display() {
+    noStroke();
+    fill(this.col);
+    ellipse(this.pos.x, this.pos.y, sqrt(this.mass) * 0.5);
+  }
+}
+
+// Planet.js
+class Planet {
+  constructor(x, y, velocity) {
+    this.pos = createVector(x, y);
+    this.vel = velocity || p5.Vector.random2D().mult(random(1, 2));
+    this.acc = createVector();
+    this.mass = random(5, 15);
+    this.col = color(random(100, 255), random(100, 255), random(100, 255));
+    this.history = [];
+  }
+
+  applyForce(f) {
+    let a = p5.Vector.div(f, this.mass);
+    this.acc.add(a);
+  }
+
+  update() {
+    // Save current position to history
+    this.history.push(this.pos.copy());
+    if (this.history.length > 50) {
+      this.history.shift(); // Limit trail length
+    }
+
+    this.vel.add(this.acc);
+    this.pos.add(this.vel);
+    this.acc.mult(0);
+  }
+
+  display() {
+    // Draw trail
+    noStroke();
+    for (let i = 0; i < this.history.length; i++) {
+      let alpha = map(i, 0, this.history.length, 0, 60); 
+      fill(red(this.col), green(this.col), blue(this.col), alpha);
+      let size = this.mass * 0.3;
+      ellipse(this.history[i].x, this.history[i].y, size);
+    }
+
+    // Draw planet
+    fill(this.col);
+    noStroke();
+    ellipse(this.pos.x, this.pos.y, this.mass * 1.5);
+
+    // Draw velocity vector 
+    if (showVectors) {
+      stroke('#00FFFF');  
+      strokeWeight(2);
+      let v = this.vel.copy().setMag(20);
+      let start = this.pos.copy();
+      let end = p5.Vector.add(start, v);
+
+      // Draw line
+      line(start.x, start.y, end.x, end.y);
+
+      // Draw arrowhead
+      push();
+      translate(end.x, end.y);
+      let angle = v.heading();
+      rotate(angle);
+      fill('#00FFFF');  
+      noStroke();
+      triangle(0, 0, -8, 4, -8, -4);
+      pop();
+    }
+  }
+
+  isOffscreen() {
+    return this.pos.x < -50 || this.pos.x > width + 50 ||
+           this.pos.y < -50 || this.pos.y > height + 50;
+  }
+}
+
+//html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=WDXL+Lubrifont+TC&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.5/lib/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/addons/p5.sound.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <meta charset="utf-8" />
+
+  </head>
+  <body>
+    <main>
+    </main>
+    <script src="sketch.js"></script>
+    <script src="ImportantBody.js"></script>
+    <script src="Planet.js"></script>
+  </body>
+</html>
+
