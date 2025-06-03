@@ -1,3 +1,135 @@
+//ImportantBody.js
+
+// Sun and black hole
+class ImportantBody {
+  constructor(x, y, mass, col) {
+    this.pos = createVector(x, y);
+    this.mass = mass;
+    this.col = col;
+    this.eventHorizonRadius = sqrt(this.mass) * 0.25; // Approximate radius
+  }
+
+  calculateGravity(p) {
+    let dir = p5.Vector.sub(this.pos, p.pos);
+    let d = constrain(dir.mag(), 5, 500);
+    let G = 1;
+    let forceMag = (G * this.mass * p.mass) / (d * d);
+    dir.setMag(forceMag);
+    return dir;
+  }
+
+  display() {
+    push();
+    translate(this.pos.x, this.pos.y);
+    noStroke();
+
+    // Accretion disk for black holes
+    if (this.mass > 15000) { // Assume it's a black hole
+      for (let r = this.eventHorizonRadius + 5; r < this.eventHorizonRadius + 30; r += 2) {
+        fill(200, 100, 0, 10); // Glowing disk
+        ellipse(0, 0, r * 2);
+      }
+    }
+
+    // Glow effect
+    drawingContext.shadowBlur = 25;
+    drawingContext.shadowColor = this.col;
+    fill(this.col);
+    ellipse(0, 0, this.eventHorizonRadius * 2);
+    drawingContext.shadowBlur = 0;
+
+    pop();
+  }
+
+  // Returns true if a planet crosses the event horizon
+  absorbs(p) {
+    let d = p.pos.dist(this.pos);
+    return d < this.eventHorizonRadius;
+  }
+}
+
+//Planet.js
+
+// Planets orbiting around sun/ getting destroyed by black hole
+class Planet {
+  constructor(x, y, velocity) {
+    this.pos = createVector(x, y);
+    this.vel = velocity || p5.Vector.random2D().mult(random(1, 2));
+    this.acc = createVector();
+    this.mass = random(5, 15);
+    this.col = color(random(100, 255), random(100, 255), random(100, 255));
+    this.history = [];
+  }
+
+  applyForce(f) {
+    let a = p5.Vector.div(f, this.mass);
+    this.acc.add(a);
+  }
+
+  update() {
+    this.history.push(this.pos.copy());
+    if (this.history.length > 50) {
+      this.history.shift();
+    }
+
+    this.vel.add(this.acc);
+    this.pos.add(this.vel);
+    this.acc.mult(0);
+  }
+
+  display() {
+    // Trail
+    noStroke();
+    for (let i = 0; i < this.history.length; i++) {
+      let alpha = map(i, 0, this.history.length, 0, 60);
+      fill(red(this.col), green(this.col), blue(this.col), alpha);
+      let size = this.mass * 0.3;
+      ellipse(this.history[i].x, this.history[i].y, size);
+    }
+
+    // Time dilation fade near black hole
+    let fade = 255;
+    if (chaoticMode && blackHole) {
+      let d = this.pos.dist(blackHole.pos);
+      fade = map(d, 0, blackHole.eventHorizonRadius * 5, 50, 255, true);
+    }
+
+    fill(red(this.col), green(this.col), blue(this.col), fade);
+    noStroke();
+    ellipse(this.pos.x, this.pos.y, this.mass * 1.5);
+
+    // Velocity vector
+    if (showVectors) {
+      stroke('#00FFFF');
+      strokeWeight(2);
+      let v = this.vel.copy().setMag(20);
+      let start = this.pos.copy();
+      let end = p5.Vector.add(start, v);
+
+      line(start.x, start.y, end.x, end.y);
+
+      // Arrowhead
+      push();
+      translate(end.x, end.y);
+      let angle = v.heading();
+      rotate(angle);
+      fill('#00FFFF');
+      noStroke();
+      triangle(0, 0, -8, 4, -8, -4);
+      pop();
+    }
+  }
+
+  isOffscreen() {
+    return (
+      this.pos.x < -50 || this.pos.x > width + 50 ||
+      this.pos.y < -50 || this.pos.y > height + 50
+    );
+  }
+}
+
+//sketch.js
+
 let planets = [];
 let sun;
 let blackHole = null;
@@ -64,7 +196,14 @@ function draw() {
     p.display();
   }
 
-  planets = planets.filter(p => !p.isOffscreen());
+  planets = planets.filter(p => {
+  if (p.isOffscreen()) return false;
+  if (chaoticMode && blackHole && blackHole.absorbs(p)) {
+    return false;
+  }
+  return true;
+});
+
 
   // Box beow control text for readability
   noStroke();
@@ -100,7 +239,7 @@ Mode: ${chaoticMode ? "CHAOTIC (black hole)" : "CALM (sun only)"}`, 10, 10);
 function mousePressed() {
   addOrbitingPlanet(mouseX, mouseY);
 }
-// Other Controls
+// Key Controls
 function keyPressed() {
   let k = key.toUpperCase();
 
@@ -130,103 +269,8 @@ function addOrbitingPlanet(x = random(width), y = random(height)) {
   planets.push(new Planet(x, y, tangent));
 }
 
-// ImportantBody.js
-class ImportantBody {
-  constructor(x, y, mass, col) {
-    this.pos = createVector(x, y);
-    this.mass = mass;
-    this.col = col;
-  }
+//index.html
 
-  calculateGravity(p) {
-    let dir = p5.Vector.sub(this.pos, p.pos);
-    let d = constrain(dir.mag(), 5, 500);
-    let G = 1;
-    let forceMag = (G * this.mass * p.mass) / (d * d);
-    dir.setMag(forceMag);
-    return dir;
-  }
-
-  display() {
-    noStroke();
-    fill(this.col);
-    ellipse(this.pos.x, this.pos.y, sqrt(this.mass) * 0.5);
-  }
-}
-
-// Planet.js
-class Planet {
-  constructor(x, y, velocity) {
-    this.pos = createVector(x, y);
-    this.vel = velocity || p5.Vector.random2D().mult(random(1, 2));
-    this.acc = createVector();
-    this.mass = random(5, 15);
-    this.col = color(random(100, 255), random(100, 255), random(100, 255));
-    this.history = [];
-  }
-
-  applyForce(f) {
-    let a = p5.Vector.div(f, this.mass);
-    this.acc.add(a);
-  }
-
-  update() {
-    // Save current position to history
-    this.history.push(this.pos.copy());
-    if (this.history.length > 50) {
-      this.history.shift(); // Limit trail length
-    }
-
-    this.vel.add(this.acc);
-    this.pos.add(this.vel);
-    this.acc.mult(0);
-  }
-
-  display() {
-    // Draw trail
-    noStroke();
-    for (let i = 0; i < this.history.length; i++) {
-      let alpha = map(i, 0, this.history.length, 0, 60); 
-      fill(red(this.col), green(this.col), blue(this.col), alpha);
-      let size = this.mass * 0.3;
-      ellipse(this.history[i].x, this.history[i].y, size);
-    }
-
-    // Draw planet
-    fill(this.col);
-    noStroke();
-    ellipse(this.pos.x, this.pos.y, this.mass * 1.5);
-
-    // Draw velocity vector 
-    if (showVectors) {
-      stroke('#00FFFF');  
-      strokeWeight(2);
-      let v = this.vel.copy().setMag(20);
-      let start = this.pos.copy();
-      let end = p5.Vector.add(start, v);
-
-      // Draw line
-      line(start.x, start.y, end.x, end.y);
-
-      // Draw arrowhead
-      push();
-      translate(end.x, end.y);
-      let angle = v.heading();
-      rotate(angle);
-      fill('#00FFFF');  
-      noStroke();
-      triangle(0, 0, -8, 4, -8, -4);
-      pop();
-    }
-  }
-
-  isOffscreen() {
-    return this.pos.x < -50 || this.pos.x > width + 50 ||
-           this.pos.y < -50 || this.pos.y > height + 50;
-  }
-}
-
-//html
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -247,4 +291,5 @@ class Planet {
     <script src="Planet.js"></script>
   </body>
 </html>
+
 
