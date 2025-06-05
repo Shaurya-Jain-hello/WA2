@@ -1,7 +1,7 @@
-//ImportantBody.js
+//GravitationalBody.js
 
 // Sun and black hole
-class ImportantBody {
+class GravitationalBody {
   constructor(x, y, mass, col) {
     this.pos = createVector(x, y);
     this.mass = mass;
@@ -153,7 +153,7 @@ function setup() {
   }
 
   // Sun
-  sun = new ImportantBody(width / 2, height / 2, 10000, color(255, 204, 0)); // Yellow
+  sun = new GravitationalBody(width / 2, height / 2, 10000, color(255, 204, 0)); // Yellow
 
   // Black hole for chaotic mode
   blackHole = chaoticMode ? new ImportantBody(random(width), random(height), 30000, color(30)) : null;
@@ -287,7 +287,7 @@ function addOrbitingPlanet(x = random(width), y = random(height)) {
     <main>
     </main>
     <script src="sketch.js"></script>
-    <script src="ImportantBody.js"></script>
+    <script src=GravitationalBody.js"></script>
     <script src="Planet.js"></script>
   </body>
 </html>
